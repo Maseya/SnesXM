@@ -13,6 +13,13 @@ namespace SnesXM
 
     public class RegisterMath
     {
+        public RegisterMath(IMemoryReader memoryReader)
+        {
+            Registers = new Registers();
+            MemoryReader = memoryReader ??
+                throw new ArgumentNullException(nameof(memoryReader));
+        }
+
         private Registers Registers
         {
             get;
