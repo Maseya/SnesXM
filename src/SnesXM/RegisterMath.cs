@@ -13,17 +13,24 @@ namespace SnesXM
 
     public class RegisterMath
     {
-        private Registers Registers
+        public RegisterMath(IMemoryReader memoryReader)
+        {
+            Registers = new Registers();
+            MemoryReader = memoryReader ??
+                throw new ArgumentNullException(nameof(memoryReader));
+        }
+
+        public Registers Registers
         {
             get;
         }
 
-        private IMemoryReader MemoryReader
+        public IMemoryReader MemoryReader
         {
             get;
         }
 
-        private byte AL
+        public byte AL
         {
             get
             {
@@ -37,7 +44,7 @@ namespace SnesXM
             }
         }
 
-        private ushort A
+        public ushort A
         {
             get
             {
@@ -51,7 +58,7 @@ namespace SnesXM
             }
         }
 
-        private byte XL
+        public byte XL
         {
             get
             {
@@ -65,7 +72,7 @@ namespace SnesXM
             }
         }
 
-        private ushort X
+        public ushort X
         {
             get
             {
@@ -79,7 +86,7 @@ namespace SnesXM
             }
         }
 
-        private byte YL
+        public byte YL
         {
             get
             {
@@ -93,7 +100,7 @@ namespace SnesXM
             }
         }
 
-        private ushort Y
+        public ushort Y
         {
             get
             {
@@ -107,7 +114,7 @@ namespace SnesXM
             }
         }
 
-        private bool IsCarrySet
+        public bool IsCarrySet
         {
             get
             {
@@ -120,7 +127,7 @@ namespace SnesXM
             }
         }
 
-        private bool IsDecimalMode
+        public bool IsDecimalMode
         {
             get
             {
@@ -133,7 +140,7 @@ namespace SnesXM
             }
         }
 
-        private bool IsOverflowSet
+        public bool IsOverflowSet
         {
             get
             {
@@ -146,7 +153,7 @@ namespace SnesXM
             }
         }
 
-        private bool IsNegativeSet
+        public bool IsNegativeSet
         {
             get
             {
@@ -159,7 +166,7 @@ namespace SnesXM
             }
         }
 
-        private bool IsZeroSet
+        public bool IsZeroSet
         {
             get
             {
@@ -172,7 +179,7 @@ namespace SnesXM
             }
         }
 
-        private int CarryBit
+        public int CarryBit
         {
             get
             {
@@ -191,143 +198,57 @@ namespace SnesXM
             throw new NotImplementedException();
         }
 
-        public void Op00()
+        public void Adc(ushort value)
         {
-            if (Registers.IsEmulationMode)
+            int result;
+            if (IsDecimalMode)
             {
-                throw new NotImplementedException();
+                var carryWithA = BcdAdd(A, CarryBit);
+                result = BcdAdd(carryWithA, value);
+            }
+            else
+            {
+                result = A + CarryBit + value;
             }
 
-            throw new NotImplementedException();
-        }
-
-        private void Adc(ushort value)
-        {
-            var result = IsDecimalMode ? AdcDecimal() : AdcHex();
+            IsCarrySet = result >= 0x10000;
             var overflowBit = ~(A ^ value) & (value ^ result) & 0x8000;
 
             IsOverflowSet = overflowBit != 0;
-            A = result;
-
-            ushort AdcHex()
-            {
-                var sum = A + value + CarryBit;
-                IsCarrySet = sum >= 0x10000;
-                return (ushort)sum;
-            }
-
-            ushort AdcDecimal()
-            {
-                (var l1, var l2, var l3, var l4) = GetDigits(A);
-                (var r1, var r2, var r3, var r4) = GetDigits(value);
-
-                var s1 = l1 + r1 + CarryBit;
-                var s2 = l2 + r2;
-                var s3 = l3 + r3;
-                var s4 = l4 + r4;
-
-                if (s1 > 0x0009)
-                {
-                    s1 -= 0x000A;
-                    s1 &= 0x000F;
-                    s2 += 0x0010;
-                }
-
-                if (s2 > 0x0090)
-                {
-                    s2 -= 0x00A0;
-                    s2 &= 0x00F0;
-                    s3 += 0x0100;
-                }
-
-                if (s3 > 0x0900)
-                {
-                    s3 -= 0x0A00;
-                    s3 &= 0x0F00;
-                    s4 += 0x1000;
-                }
-
-                IsCarrySet = s4 > 0x9000;
-                if (IsCarrySet)
-                {
-                    s4 -= 0xA000;
-                    s4 &= 0xF000;
-                }
-
-                var sum = s4 | s3 | s2 | s1;
-                return (ushort)sum;
-
-                (int n1, int n2, int n3, int n4) GetDigits(int number)
-                {
-                    return (
-                        number & 0x000F,
-                        number & 0x00F0,
-                        number & 0x0F00,
-                        number & 0xF000);
-                }
-            }
+            A = (ushort)result;
         }
 
-        private void Adc(byte value)
+        public void Adc(byte value)
         {
-            var result = IsDecimalMode ? AdcDecimal() : AdcHex();
+            int result;
+            if (IsDecimalMode)
+            {
+                result = BcdAdd(A, value);
+                result = BcdAdd(result, CarryBit);
+            }
+            else
+            {
+                result = A + value + CarryBit;
+            }
 
+            IsCarrySet = result >= 0x100;
             var overflowBit = ~(AL ^ value) & (value ^ result) & 0x80;
 
             IsOverflowSet = overflowBit != 0;
-            AL = result;
-
-            byte AdcHex()
-            {
-                var sum = AL + value + CarryBit;
-                IsCarrySet = sum >= 0x100;
-                return (byte)sum;
-            }
-
-            byte AdcDecimal()
-            {
-                (var l1, var l2) = GetDigits(AL);
-                (var r1, var r2) = GetDigits(value);
-
-                var s1 = l1 + r1 + CarryBit;
-                var s2 = l2 + r2;
-
-                if (s1 > 0x09)
-                {
-                    s1 -= 0x0A;
-                    s1 &= 0x0F;
-                    s2 += 0x10;
-                }
-
-                IsCarrySet = s2 > 0x90;
-                if (IsCarrySet)
-                {
-                    s2 -= 0xA0;
-                    s2 &= 0xF0;
-                    IsCarrySet = true;
-                }
-
-                var sum = s2 | s1;
-                return (byte)sum;
-
-                (int n1, int n2) GetDigits(int number)
-                {
-                    return (number & 0x0F, number & 0xF0);
-                }
-            }
+            AL = (byte)result;
         }
 
-        private void And(ushort value)
+        public void And(ushort value)
         {
             A &= value;
         }
 
-        private void And(byte value)
+        public void And(byte value)
         {
             AL &= value;
         }
 
-        private void Asl(int address, WrapMode wrapMode)
+        public void Asl(int address, WrapMode wrapMode)
         {
             var value = ReadWord(address, wrapMode);
             var result = value << 1;
@@ -340,7 +261,7 @@ namespace SnesXM
                 WriteOrder.Write10);
         }
 
-        private void Asl(int address)
+        public void Asl(int address)
         {
             var value = ReadByte(address);
             var result = value << 1;
@@ -349,63 +270,63 @@ namespace SnesXM
             WriteByteAddOneCycleSetZN(result, address);
         }
 
-        private void Bit(ushort value)
+        public void Bit(ushort value)
         {
             IsOverflowSet = (value & 0x4000) != 0;
             IsNegativeSet = (value & 0x8000) != 0;
             IsZeroSet = (value & A) == 0;
         }
 
-        private void Bit(byte value)
+        public void Bit(byte value)
         {
             IsOverflowSet = (value & 0x40) != 0;
             IsNegativeSet = (value & 0x80) != 0;
             IsZeroSet = (value & AL) == 0;
         }
 
-        private void Cmp(ushort value)
+        public void Cmp(ushort value)
         {
             var result = A - value;
             IsCarrySet = result >= 0;
             SetZN((ushort)result);
         }
 
-        private void Cmp(byte value)
+        public void Cmp(byte value)
         {
             var result = AL - value;
             IsCarrySet = result >= 0;
             SetZN((byte)result);
         }
 
-        private void Cpx(ushort value)
+        public void Cpx(ushort value)
         {
             var result = X - value;
             IsCarrySet = result >= 0;
             SetZN((ushort)result);
         }
 
-        private void Cpx(byte value)
+        public void Cpx(byte value)
         {
             var result = XL - value;
             IsCarrySet = result >= 0;
             SetZN((byte)result);
         }
 
-        private void Cpy(ushort value)
+        public void Cpy(ushort value)
         {
             var result = Y - value;
             IsCarrySet = result >= 0;
             SetZN((ushort)result);
         }
 
-        private void Cpy(byte value)
+        public void Cpy(byte value)
         {
             var result = YL - value;
             IsCarrySet = result >= 0;
             SetZN((byte)result);
         }
 
-        private void Dec(int address, WrapMode wrapMode)
+        public void Dec(int address, WrapMode wrapMode)
         {
             var value = ReadWord(address, wrapMode);
             var result = value - 1;
@@ -417,7 +338,7 @@ namespace SnesXM
                 WriteOrder.Write10);
         }
 
-        private void Dec(int address)
+        public void Dec(int address)
         {
             var value = ReadByte(address);
             var result = value - 1;
@@ -425,17 +346,17 @@ namespace SnesXM
             WriteByteAddOneCycleSetZN(result, address);
         }
 
-        private void Eor(ushort value)
+        public void Eor(ushort value)
         {
             A ^= value;
         }
 
-        private void Eor(byte value)
+        public void Eor(byte value)
         {
             AL ^= value;
         }
 
-        private void Inc(int address, WrapMode wrapMode)
+        public void Inc(int address, WrapMode wrapMode)
         {
             var value = ReadWord(address, wrapMode);
             var result = value + 1;
@@ -447,7 +368,7 @@ namespace SnesXM
                 WriteOrder.Write10);
         }
 
-        private void Inc(int address)
+        public void Inc(int address)
         {
             var value = ReadByte(address);
             var result = value + 1;
@@ -455,37 +376,37 @@ namespace SnesXM
             WriteByteAddOneCycleSetZN(result, address);
         }
 
-        private void Lda(ushort value)
+        public void Lda(ushort value)
         {
             A = value;
         }
 
-        private void Lda(byte value)
+        public void Lda(byte value)
         {
             AL = value;
         }
 
-        private void Ldx(ushort value)
+        public void Ldx(ushort value)
         {
             X = value;
         }
 
-        private void Ldx(byte value)
+        public void Ldx(byte value)
         {
             XL = value;
         }
 
-        private void Ldy(ushort value)
+        public void Ldy(ushort value)
         {
             Y = value;
         }
 
-        private void Ldy(byte value)
+        public void Ldy(byte value)
         {
             YL = value;
         }
 
-        private void Lsr(int address, WrapMode wrapMode)
+        public void Lsr(int address, WrapMode wrapMode)
         {
             var value = ReadWord(address, wrapMode);
             var result = value >> 1;
@@ -498,7 +419,7 @@ namespace SnesXM
                 WriteOrder.Write10);
         }
 
-        private void Lsr(int address)
+        public void Lsr(int address)
         {
             var value = ReadByte(address);
             var result = value >> 1;
@@ -507,17 +428,17 @@ namespace SnesXM
             WriteByteAddOneCycleSetZN(result, address);
         }
 
-        private void Ora(ushort value)
+        public void Ora(ushort value)
         {
             A |= value;
         }
 
-        private void Ora(byte value)
+        public void Ora(byte value)
         {
             AL |= value;
         }
 
-        private void Rol(int address, WrapMode wrapMode)
+        public void Rol(int address, WrapMode wrapMode)
         {
             var value = ReadWord(address, wrapMode);
             var result = (value << 1) | CarryBit;
@@ -530,7 +451,7 @@ namespace SnesXM
                 WriteOrder.Write10);
         }
 
-        private void Rol(int address)
+        public void Rol(int address)
         {
             var value = ReadByte(address);
             var result = (value << 1) | CarryBit;
@@ -539,7 +460,7 @@ namespace SnesXM
             WriteByteAddOneCycleSetZN(result, address);
         }
 
-        private void Ror(int address, WrapMode wrapMode)
+        public void Ror(int address, WrapMode wrapMode)
         {
             var value = ReadWord(address, wrapMode);
             var result = (value >> 1) | (CarryBit << 0x0F);
@@ -552,7 +473,7 @@ namespace SnesXM
                 WriteOrder.Write10);
         }
 
-        private void Ror(int address)
+        public void Ror(int address)
         {
             var value = ReadByte(address);
             var result = (value >> 1) | (CarryBit << 7);
@@ -561,161 +482,85 @@ namespace SnesXM
             WriteByteAddOneCycleSetZN(result, address);
         }
 
-        private void Sbc(ushort value)
+        public void Sbc(ushort value)
         {
-            var result = IsDecimalMode ? SbcDecimal() : SbcHex();
+            int result;
+            if (IsDecimalMode)
+            {
+                var carryWithA = BcdAdd(A, CarryBit ^ 1);
+                result = BcdSubtract(carryWithA, value);
+            }
+            else
+            {
+                result = A + (CarryBit ^ 1) - value;
+            }
+
             var overflowBit = (A ^ value) & (A ^ result) & 0x8000;
 
             IsOverflowSet = overflowBit != 0;
-            A = result;
-
-            ushort SbcHex()
-            {
-                var diff = A - value + CarryBit - 1;
-                IsCarrySet = diff >= 0;
-                return (ushort)diff;
-            }
-
-            ushort SbcDecimal()
-            {
-                (var l1, var l2, var l3, var l4) = GetDigits(A);
-                (var r1, var r2, var r3, var r4) = GetDigits(value);
-
-                var s1 = l1 - r1 + CarryBit - 1;
-                var s2 = l2 - r2;
-                var s3 = l3 - r3;
-                var s4 = l4 - r4;
-
-                if (s1 > 0x000F)
-                {
-                    s1 += 0x000A;
-                    s1 &= 0x000F;
-                    s2 -= 0x0010;
-                }
-
-                if (s2 > 0x00F0)
-                {
-                    s2 += 0x00A0;
-                    s2 &= 0x00F0;
-                    s3 -= 0x0100;
-                }
-
-                if (s3 > 0x0F00)
-                {
-                    s3 += 0x0A00;
-                    s3 &= 0x0F00;
-                    s4 -= 0x1000;
-                }
-
-                IsCarrySet = s4 <= 0xF000;
-                if (!IsCarrySet)
-                {
-                    s4 += 0xA000;
-                    s4 &= 0xF000;
-                }
-
-                var diff = s4 | s3 | s2 | s1;
-                return (ushort)diff;
-
-                (int n1, int n2, int n3, int n4) GetDigits(int number)
-                {
-                    return (
-                        number & 0x000F,
-                        number & 0x00F0,
-                        number & 0x0F00,
-                        number & 0xF000);
-                }
-            }
+            A = (ushort)result;
         }
 
-        private void Sbc(byte value)
+        public void Sbc(byte value)
         {
-            var result = IsDecimalMode ? AdcDecimal() : AdcHex();
-            var overflowBit = (AL ^ value) & (AL ^ result) & 0x80;
+            int result;
+            if (IsDecimalMode)
+            {
+                var carryWithA = BcdAdd(A, CarryBit ^ 1);
+                result = BcdSubtract(carryWithA, value);
+            }
+            else
+            {
+                result = A + (CarryBit ^ 1) - value;
+            }
+
+            var overflowBit = (A ^ value) & (A ^ result) & 0x80;
 
             IsOverflowSet = overflowBit != 0;
-            AL = result;
-
-            byte AdcHex()
-            {
-                var diff = AL - value + CarryBit - 1;
-                IsCarrySet = diff >= 0;
-                return (byte)diff;
-            }
-
-            byte AdcDecimal()
-            {
-                (var l1, var l2) = GetDigits(AL);
-                (var r1, var r2) = GetDigits(value);
-
-                var s1 = l1 - r1 + CarryBit - 1;
-                var s2 = l2 - r2;
-
-                if (s1 > 0x0F)
-                {
-                    s1 += 0x0A;
-                    s1 &= 0x0F;
-                    s2 -= 0x10;
-                }
-
-                IsCarrySet = s2 <= 0xF0;
-                if (!IsCarrySet)
-                {
-                    s2 += 0xA0;
-                    s2 &= 0xF0;
-                }
-
-                var diff = s2 | s1;
-                return (byte)diff;
-
-                (int n1, int n2) GetDigits(int number)
-                {
-                    return (number & 0x0F, number & 0xF0);
-                }
-            }
+            A = (ushort)result;
         }
 
-        private void Sta(int address, WrapMode wrapMode)
+        public void Sta(int address, WrapMode wrapMode)
         {
             WriteWord(A, address, wrapMode);
         }
 
-        private void Sta(int address)
+        public void Sta(int address)
         {
             WriteByte(AL, address);
         }
 
-        private void Stx(int address, WrapMode wrapMode)
+        public void Stx(int address, WrapMode wrapMode)
         {
             WriteWord(X, address, wrapMode);
         }
 
-        private void Stx(int address)
+        public void Stx(int address)
         {
             WriteByte(XL, address);
         }
 
-        private void Sty(int address, WrapMode wrapMode)
+        public void Sty(int address, WrapMode wrapMode)
         {
             WriteWord(Y, address, wrapMode);
         }
 
-        private void Sty(int address)
+        public void Sty(int address)
         {
             WriteByte(YL, address);
         }
 
-        private void Stz(int address, WrapMode wrapMode)
+        public void Stz(int address, WrapMode wrapMode)
         {
             WriteWord(0, address, wrapMode);
         }
 
-        private void Stz(int address)
+        public void Stz(int address)
         {
             WriteByte(0, address);
         }
 
-        private void Tsb(int address, WrapMode wrapMode)
+        public void Tsb(int address, WrapMode wrapMode)
         {
             var value = ReadWord(address, wrapMode);
             var result = value | A;
@@ -728,7 +573,7 @@ namespace SnesXM
                 WriteOrder.Write10);
         }
 
-        private void Tsb(int address)
+        public void Tsb(int address)
         {
             var value = ReadByte(address);
             var result = value | AL;
@@ -737,7 +582,7 @@ namespace SnesXM
             WriteByteAddOneCycle(result, address);
         }
 
-        private void Trb(int address, WrapMode wrapMode)
+        public void Trb(int address, WrapMode wrapMode)
         {
             var value = ReadWord(address, wrapMode);
             var result = value & ~A;
@@ -750,13 +595,69 @@ namespace SnesXM
                 WriteOrder.Write10);
         }
 
-        private void Trb(int address)
+        public void Trb(int address)
         {
             var value = ReadByte(address);
             var result = value & ~AL;
 
             IsZeroSet = (value & AL) == 0;
             WriteByteAddOneCycle(result, address);
+        }
+
+        private static bool IsValidBcd(int a)
+        {
+            var t1 = a + 0x06666666;
+            var t2 = t1 ^ a;
+            var t3 = t2 & 0x11111110;
+            return t3 == 0;
+        }
+
+        private static int BcdAdd(int left, int right)
+        {
+            // If we assume that left is a valid BCD value, then this
+            // addition should produce no carries.
+            var t1 = left + 0x06666666;
+
+            // Digits in this sum are correct for any sums that produced
+            // a carry. Digits that didn't produce a carry will have an
+            // excess value of 6.
+            var t2 = t1 + right;
+
+            // t2 and t3 will differ wherever there was a carry.
+            var t3 = t1 ^ right;
+
+            // Records where all carries took place in the sum.
+            var t4 = t2 ^ t3;
+
+            // Holds all positions where a carry didn't take place.
+            var t5 = ~t4 & 0x11111110;
+
+            // Each digit that didn't have a carry will be 6. Each digit
+            // that did have a carry will be 0.
+            var t6 = (t5 >> 2) | (t5 >> 3);
+
+            // Remove the excess of 6 from each digit that didn't have a
+            // carry in its addition.
+            var result = t2 - t6;
+            return result;
+        }
+
+        private static int BcdTensComplement(int value)
+        {
+            var t1 = -value;
+            var t2 = t1 - 1;
+            var t3 = t2 ^ 1;
+            var t4 = t1 ^ t3;
+            var t5 = ~t4 & 0x11111110;
+            var t6 = (t5 >> 2) | (t5 >> 3);
+            return t1 - t6;
+        }
+
+        private static int BcdSubtract(int left, int right)
+        {
+            var tensComplementRight = BcdTensComplement(right);
+            var result = BcdAdd(left, tensComplementRight);
+            return right;
         }
 
         private void SetZN(ushort value)

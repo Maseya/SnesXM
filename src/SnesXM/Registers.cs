@@ -106,7 +106,6 @@ namespace SnesXM
         }
 
         public bool IsCarrySet
-
         {
             get
             {
