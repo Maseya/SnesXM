@@ -200,118 +200,42 @@ namespace SnesXM
 
         private void Adc(ushort value)
         {
-            var result = IsDecimalMode ? AdcDecimal() : AdcHex();
+            int result;
+            if (IsDecimalMode)
+            {
+                var carryWithA = BcdAdd(A, CarryBit);
+                result = BcdAdd(carryWithA, value);
+            }
+            else
+            {
+                result = A + CarryBit + value;
+            }
+
+            IsCarrySet = result >= 0x10000;
             var overflowBit = ~(A ^ value) & (value ^ result) & 0x8000;
 
             IsOverflowSet = overflowBit != 0;
-            A = result;
-
-            ushort AdcHex()
-            {
-                var sum = A + value + CarryBit;
-                IsCarrySet = sum >= 0x10000;
-                return (ushort)sum;
-            }
-
-            ushort AdcDecimal()
-            {
-                (var l1, var l2, var l3, var l4) = GetDigits(A);
-                (var r1, var r2, var r3, var r4) = GetDigits(value);
-
-                var s1 = l1 + r1 + CarryBit;
-                var s2 = l2 + r2;
-                var s3 = l3 + r3;
-                var s4 = l4 + r4;
-
-                if (s1 > 0x0009)
-                {
-                    s1 -= 0x000A;
-                    s1 &= 0x000F;
-                    s2 += 0x0010;
-                }
-
-                if (s2 > 0x0090)
-                {
-                    s2 -= 0x00A0;
-                    s2 &= 0x00F0;
-                    s3 += 0x0100;
-                }
-
-                if (s3 > 0x0900)
-                {
-                    s3 -= 0x0A00;
-                    s3 &= 0x0F00;
-                    s4 += 0x1000;
-                }
-
-                IsCarrySet = s4 > 0x9000;
-                if (IsCarrySet)
-                {
-                    s4 -= 0xA000;
-                    s4 &= 0xF000;
-                }
-
-                var sum = s4 | s3 | s2 | s1;
-                return (ushort)sum;
-
-                (int n1, int n2, int n3, int n4) GetDigits(int number)
-                {
-                    return (
-                        number & 0x000F,
-                        number & 0x00F0,
-                        number & 0x0F00,
-                        number & 0xF000);
-                }
-            }
+            A = (ushort)result;
         }
 
         private void Adc(byte value)
         {
-            var result = IsDecimalMode ? AdcDecimal() : AdcHex();
+            int result;
+            if (IsDecimalMode)
+            {
+                result = BcdAdd(A, value);
+                result = BcdAdd(result, CarryBit);
+            }
+            else
+            {
+                result = A + value + CarryBit;
+            }
 
+            IsCarrySet = result >= 0x100;
             var overflowBit = ~(AL ^ value) & (value ^ result) & 0x80;
 
             IsOverflowSet = overflowBit != 0;
-            AL = result;
-
-            byte AdcHex()
-            {
-                var sum = AL + value + CarryBit;
-                IsCarrySet = sum >= 0x100;
-                return (byte)sum;
-            }
-
-            byte AdcDecimal()
-            {
-                (var l1, var l2) = GetDigits(AL);
-                (var r1, var r2) = GetDigits(value);
-
-                var s1 = l1 + r1 + CarryBit;
-                var s2 = l2 + r2;
-
-                if (s1 > 0x09)
-                {
-                    s1 -= 0x0A;
-                    s1 &= 0x0F;
-                    s2 += 0x10;
-                }
-
-                IsCarrySet = s2 > 0x90;
-                if (IsCarrySet)
-                {
-                    s2 -= 0xA0;
-                    s2 &= 0xF0;
-                    IsCarrySet = true;
-                }
-
-                var sum = s2 | s1;
-                return (byte)sum;
-
-                (int n1, int n2) GetDigits(int number)
-                {
-                    return (number & 0x0F, number & 0xF0);
-                }
-            }
+            AL = (byte)result;
         }
 
         private void And(ushort value)
@@ -560,116 +484,40 @@ namespace SnesXM
 
         private void Sbc(ushort value)
         {
-            var result = IsDecimalMode ? SbcDecimal() : SbcHex();
+            int result;
+            if (IsDecimalMode)
+            {
+                var carryWithA = BcdAdd(A, CarryBit ^ 1);
+                result = BcdSubtract(carryWithA, value);
+            }
+            else
+            {
+                result = A + (CarryBit ^ 1) - value;
+            }
+
             var overflowBit = (A ^ value) & (A ^ result) & 0x8000;
 
             IsOverflowSet = overflowBit != 0;
-            A = result;
-
-            ushort SbcHex()
-            {
-                var diff = A - value + CarryBit - 1;
-                IsCarrySet = diff >= 0;
-                return (ushort)diff;
-            }
-
-            ushort SbcDecimal()
-            {
-                (var l1, var l2, var l3, var l4) = GetDigits(A);
-                (var r1, var r2, var r3, var r4) = GetDigits(value);
-
-                var s1 = l1 - r1 + CarryBit - 1;
-                var s2 = l2 - r2;
-                var s3 = l3 - r3;
-                var s4 = l4 - r4;
-
-                if (s1 > 0x000F)
-                {
-                    s1 += 0x000A;
-                    s1 &= 0x000F;
-                    s2 -= 0x0010;
-                }
-
-                if (s2 > 0x00F0)
-                {
-                    s2 += 0x00A0;
-                    s2 &= 0x00F0;
-                    s3 -= 0x0100;
-                }
-
-                if (s3 > 0x0F00)
-                {
-                    s3 += 0x0A00;
-                    s3 &= 0x0F00;
-                    s4 -= 0x1000;
-                }
-
-                IsCarrySet = s4 <= 0xF000;
-                if (!IsCarrySet)
-                {
-                    s4 += 0xA000;
-                    s4 &= 0xF000;
-                }
-
-                var diff = s4 | s3 | s2 | s1;
-                return (ushort)diff;
-
-                (int n1, int n2, int n3, int n4) GetDigits(int number)
-                {
-                    return (
-                        number & 0x000F,
-                        number & 0x00F0,
-                        number & 0x0F00,
-                        number & 0xF000);
-                }
-            }
+            A = (ushort)result;
         }
 
         private void Sbc(byte value)
         {
-            var result = IsDecimalMode ? AdcDecimal() : AdcHex();
-            var overflowBit = (AL ^ value) & (AL ^ result) & 0x80;
+            int result;
+            if (IsDecimalMode)
+            {
+                var carryWithA = BcdAdd(A, CarryBit ^ 1);
+                result = BcdSubtract(carryWithA, value);
+            }
+            else
+            {
+                result = A + (CarryBit ^ 1) - value;
+            }
+
+            var overflowBit = (A ^ value) & (A ^ result) & 0x80;
 
             IsOverflowSet = overflowBit != 0;
-            AL = result;
-
-            byte AdcHex()
-            {
-                var diff = AL - value + CarryBit - 1;
-                IsCarrySet = diff >= 0;
-                return (byte)diff;
-            }
-
-            byte AdcDecimal()
-            {
-                (var l1, var l2) = GetDigits(AL);
-                (var r1, var r2) = GetDigits(value);
-
-                var s1 = l1 - r1 + CarryBit - 1;
-                var s2 = l2 - r2;
-
-                if (s1 > 0x0F)
-                {
-                    s1 += 0x0A;
-                    s1 &= 0x0F;
-                    s2 -= 0x10;
-                }
-
-                IsCarrySet = s2 <= 0xF0;
-                if (!IsCarrySet)
-                {
-                    s2 += 0xA0;
-                    s2 &= 0xF0;
-                }
-
-                var diff = s2 | s1;
-                return (byte)diff;
-
-                (int n1, int n2) GetDigits(int number)
-                {
-                    return (number & 0x0F, number & 0xF0);
-                }
-            }
+            A = (ushort)result;
         }
 
         private void Sta(int address, WrapMode wrapMode)
@@ -754,6 +602,62 @@ namespace SnesXM
 
             IsZeroSet = (value & AL) == 0;
             WriteByteAddOneCycle(result, address);
+        }
+
+        private static bool IsValidBcd(int a)
+        {
+            var t1 = a + 0x06666666;
+            var t2 = t1 ^ a;
+            var t3 = t2 & 0x11111110;
+            return t3 == 0;
+        }
+
+        private static int BcdAdd(int left, int right)
+        {
+            // If we assume that left is a valid BCD value, then this
+            // addition should produce no carries.
+            var t1 = left + 0x06666666;
+
+            // Digits in this sum are correct for any sums that produced
+            // a carry. Digits that didn't produce a carry will have an
+            // excess value of 6.
+            var t2 = t1 + right;
+
+            // t2 and t3 will differ wherever there was a carry.
+            var t3 = t1 ^ right;
+
+            // Records where all carries took place in the sum.
+            var t4 = t2 ^ t3;
+
+            // Holds all positions where a carry didn't take place.
+            var t5 = ~t4 & 0x11111110;
+
+            // Each digit that didn't have a carry will be 6. Each digit
+            // that did have a carry will be 0.
+            var t6 = (t5 >> 2) | (t5 >> 3);
+
+            // Remove the excess of 6 from each digit that didn't have a
+            // carry in its addition.
+            var result = t2 - t6;
+            return result;
+        }
+
+        private static int BcdTensComplement(int value)
+        {
+            var t1 = -value;
+            var t2 = t1 - 1;
+            var t3 = t2 ^ 1;
+            var t4 = t1 ^ t3;
+            var t5 = ~t4 & 0x11111110;
+            var t6 = (t5 >> 2) | (t5 >> 3);
+            return t1 - t6;
+        }
+
+        private static int BcdSubtract(int left, int right)
+        {
+            var tensComplementRight = BcdTensComplement(right);
+            var result = BcdAdd(left, tensComplementRight);
+            return right;
         }
 
         private void SetZN(ushort value)
