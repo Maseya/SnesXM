@@ -191,16 +191,6 @@ namespace SnesXM
             throw new NotImplementedException();
         }
 
-        public void Op00()
-        {
-            if (Registers.IsEmulationMode)
-            {
-                throw new NotImplementedException();
-            }
-
-            throw new NotImplementedException();
-        }
-
         private void Adc(ushort value)
         {
             var result = IsDecimalMode ? AdcDecimal() : AdcHex();
